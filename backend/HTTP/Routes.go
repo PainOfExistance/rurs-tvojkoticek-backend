@@ -22,5 +22,6 @@ func Router(router *gin.Engine) {
 	router.POST("/videostore/upload", Functions.UploadVideo)
 	router.GET("/videostore/video", Functions.GetVideo)
 	router.GET("/videostore/all", Functions.GetAllVideos)
+	router.GET("/videostore/videos/name", Functions.GetAllVideosByName)
 
 }
