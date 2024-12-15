@@ -89,6 +89,7 @@ func GetVideo(c *gin.Context) {
 		return
 	}
 
+	// Connect to MongoDB and GridFS
 	client := Mongo.GetMongoDB()
 	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
 	if err != nil {
@@ -96,81 +97,164 @@ func GetVideo(c *gin.Context) {
 		return
 	}
 
+	// Convert video_id to ObjectID
 	objectID, err := primitive.ObjectIDFromHex(videoID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid video_id"})
 		return
 	}
 
-	c.Header("Content-Type", "video/mp4")
-	_, err = bucket.DownloadToStream(objectID, c.Writer)
+	// Retrieve video metadata
+	var videoMetadata Schemas.Video
+	err = Mongo.GetCollection("videostore").FindOne(context.TODO(), bson.M{"video_id": videoID}).Decode(&videoMetadata)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming video"})
+		c.JSON(http.StatusNotFound, gin.H{"message": "Video metadata not found"})
 		return
 	}
+
+	// Set response headers for a ZIP file
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, videoMetadata.VideoName))
+
+	// Create a ZIP writer
+	zipWriter := zip.NewWriter(c.Writer)
+	defer zipWriter.Close()
+
+	// Add metadata.txt to the ZIP file
+	metadataFile, err := zipWriter.Create("metadata.txt")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating metadata file"})
+		return
+	}
+
+	// Write video metadata to metadata.txt
+	metadataContent := fmt.Sprintf(
+		"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\n",
+		videoMetadata.VideoName,
+		videoMetadata.Uploader,
+		videoMetadata.Description,
+		videoMetadata.Tags,
+		videoMetadata.PostedAt.Format(time.RFC3339),
+	)
+	_, err = metadataFile.Write([]byte(metadataContent))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error writing metadata file"})
+		return
+	}
+
+	// Add video file to the ZIP archive
+	videoFile, err := zipWriter.Create(fmt.Sprintf("%s.mp4", videoMetadata.VideoName))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating video file entry in ZIP"})
+		return
+	}
+
+	// Stream video data into the ZIP file
+	_, err = bucket.DownloadToStream(objectID, videoFile)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming video to ZIP", "error": err.Error()})
+		return
+	}
+
+	// Finalize the ZIP file
+	c.Status(http.StatusOK)
 }
 
 func GetAllVideos(c *gin.Context) {
-	// Connect to MongoDB and query all videos
+	// Connect to MongoDB and GridFS
 	client := Mongo.GetMongoDB()
 	collection := Mongo.GetCollection("videostore")
-
-	cursor, err := collection.Find(context.TODO(), bson.M{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error retrieving video metadata"})
-		return
-	}
-	defer cursor.Close(context.TODO())
-
-	// Initialize GridFS bucket
 	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating GridFS bucket"})
 		return
 	}
 
+	// Query all videos
+	cursor, err := collection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error querying video metadata"})
+		return
+	}
+	defer cursor.Close(context.TODO())
+
 	// Set response headers for ZIP file
 	c.Header("Content-Type", "application/zip")
-	c.Header("Content-Disposition", `attachment; filename="all_videos.zip"`)
+	c.Header("Content-Disposition", `attachment; filename="all_videos_with_metadata.zip"`)
 
 	// Create a ZIP writer
 	zipWriter := zip.NewWriter(c.Writer)
 	defer zipWriter.Close()
 
-	// Loop through all videos and add them to the ZIP
+	// Counter to track videos added
+	var videoCount int
+
+	// Loop through all videos
 	for cursor.Next(context.TODO()) {
-		var video Schemas.Video
-		if err := cursor.Decode(&video); err != nil {
+		var videoMetadata Schemas.Video
+		if err := cursor.Decode(&videoMetadata); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error decoding video metadata"})
 			return
 		}
 
 		// Convert video_id to ObjectID
-		objectID, err := primitive.ObjectIDFromHex(video.VideoID)
+		objectID, err := primitive.ObjectIDFromHex(videoMetadata.VideoID)
 		if err != nil {
 			fmt.Printf("Invalid ObjectID: %v\n", err)
 			continue
 		}
 
-		// Create a file entry in the ZIP archive
-		zipFile, err := zipWriter.Create(fmt.Sprintf("%s.mp4", video.VideoName))
+		// Add metadata.txt file for this video
+		metadataFile, err := zipWriter.Create(fmt.Sprintf("%s_metadata.txt", videoMetadata.VideoName))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating ZIP file entry"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating metadata file"})
 			return
 		}
 
-		// Stream the video data from GridFS into the ZIP file
-		if _, err := bucket.DownloadToStream(objectID, zipFile); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming video", "error": err.Error()})
+		// Write video metadata content
+		metadataContent := fmt.Sprintf(
+			"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\n",
+			videoMetadata.VideoName,
+			videoMetadata.Uploader,
+			videoMetadata.Description,
+			videoMetadata.Tags,
+			videoMetadata.PostedAt.Format(time.RFC3339),
+		)
+		_, err = metadataFile.Write([]byte(metadataContent))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error writing metadata file"})
 			return
 		}
+
+		// Add the video file itself
+		videoFile, err := zipWriter.Create(fmt.Sprintf("%s.mp4", videoMetadata.VideoName))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating video file in ZIP"})
+			return
+		}
+
+		// Stream video content into the ZIP file
+		_, err = bucket.DownloadToStream(objectID, videoFile)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming video to ZIP", "error": err.Error()})
+			return
+		}
+
+		videoCount++
 	}
 
+	// Check for cursor errors
 	if err := cursor.Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Cursor error"})
 		return
 	}
 
+	if videoCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "No videos found in the database"})
+		return
+	}
+
+	fmt.Printf("Total videos added to ZIP: %d\n", videoCount)
 	c.Status(http.StatusOK)
 }
 
@@ -181,10 +265,16 @@ func GetAllVideosByName(c *gin.Context) {
 		return
 	}
 
-	// Connect to MongoDB and query 'videostore' for all matching videos
+	// Connect to MongoDB and GridFS
 	client := Mongo.GetMongoDB()
 	collection := Mongo.GetCollection("videostore")
+	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating GridFS bucket"})
+		return
+	}
 
+	// Query for all videos matching the video_name
 	cursor, err := collection.Find(context.TODO(), bson.M{"video_name": videoName})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error querying video metadata"})
@@ -192,48 +282,68 @@ func GetAllVideosByName(c *gin.Context) {
 	}
 	defer cursor.Close(context.TODO())
 
-	// Initialize GridFS bucket
-	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating GridFS bucket"})
-		return
-	}
-
-	// Set response headers for a ZIP file
+	// Set response headers for ZIP file
 	c.Header("Content-Type", "application/zip")
-	c.Header("Content-Disposition", `attachment; filename="videos.zip"`)
+	c.Header("Content-Disposition", `attachment; filename="videos_with_metadata.zip"`)
 
 	// Create a ZIP writer
 	zipWriter := zip.NewWriter(c.Writer)
 	defer zipWriter.Close()
 
-	// Loop through all matching video metadata and add to ZIP
+	// Counter to track files added
+	var videoCount int
+
+	// Loop through matching videos and add them to the ZIP
 	for cursor.Next(context.TODO()) {
-		var video Schemas.Video
-		if err := cursor.Decode(&video); err != nil {
+		var videoMetadata Schemas.Video
+		if err := cursor.Decode(&videoMetadata); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error decoding video metadata"})
 			return
 		}
 
 		// Convert video_id to ObjectID
-		objectID, err := primitive.ObjectIDFromHex(video.VideoID)
+		objectID, err := primitive.ObjectIDFromHex(videoMetadata.VideoID)
 		if err != nil {
 			fmt.Printf("Invalid ObjectID: %v\n", err)
 			continue
 		}
 
-		// Create a file in the ZIP archive
-		zipFile, err := zipWriter.Create(fmt.Sprintf("%s.mp4", video.VideoName))
+		// Add metadata.txt file for this video
+		metadataFile, err := zipWriter.Create(fmt.Sprintf("%s_metadata.txt", videoMetadata.VideoName))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating ZIP file"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating metadata file"})
 			return
 		}
 
-		// Stream the video data from GridFS into the ZIP file
-		if _, err := bucket.DownloadToStream(objectID, zipFile); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming video to ZIP", "error": err.Error()})
+		metadataContent := fmt.Sprintf(
+			"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\n",
+			videoMetadata.VideoName,
+			videoMetadata.Uploader,
+			videoMetadata.Description,
+			videoMetadata.Tags,
+			videoMetadata.PostedAt.Format(time.RFC3339),
+		)
+		_, err = metadataFile.Write([]byte(metadataContent))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error writing metadata file"})
 			return
 		}
+
+		// Add the video file itself
+		videoFile, err := zipWriter.Create(fmt.Sprintf("%s.mp4", videoMetadata.VideoName))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating video file in ZIP"})
+			return
+		}
+
+		// Stream video content into the ZIP file
+		_, err = bucket.DownloadToStream(objectID, videoFile)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming video", "error": err.Error()})
+			return
+		}
+
+		videoCount++
 	}
 
 	if err := cursor.Err(); err != nil {
@@ -241,6 +351,11 @@ func GetAllVideosByName(c *gin.Context) {
 		return
 	}
 
-	// Finalize the ZIP file
+	if videoCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "No videos found with the given name"})
+		return
+	}
+
+	fmt.Printf("Total videos added to ZIP: %d\n", videoCount)
 	c.Status(http.StatusOK)
 }
