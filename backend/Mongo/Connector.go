@@ -2,15 +2,16 @@ package Mongo
 
 import (
 	"context"
+	"log"
+
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 )
 
 var mongoDBInstance *mongo.Client = nil
 
 func ConnectToMongoDB() {
-	uri := "mongodb+srv://admin:admin@cluster0.td7uetr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+	uri := "mongodb+srv://admin:admin@cluster0.gsva6.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
 	// Create a new MongoDB instance with the provided URI
 	newMongoInstance, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
