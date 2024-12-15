@@ -18,4 +18,9 @@ func Router(router *gin.Engine) {
 
 	router.POST("/comment", Functions.CreateComment)
 	router.DELETE("/comment", Functions.DeleteComment)
+
+	router.POST("/videostore/upload", Functions.UploadVideo)
+	router.GET("/videostore/video", Functions.GetVideo)
+	router.GET("/videostore/all", Functions.GetAllVideos)
+
 }
