@@ -1,0 +1,9 @@
+services:
+  backend:
+    image: tvoj_koticek_backend_image:latest
+    build: .
+    env_file:
+      - .env
+    container_name: tvoj_koticek_backend
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
