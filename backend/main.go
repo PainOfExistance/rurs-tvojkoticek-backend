@@ -20,8 +20,8 @@ func main() {
 
 	// Access environment variables
 	port := os.Getenv("BACKEND_PORT")
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
-	fmt.printf("Allowed origins: %s", allowedOrigins)
+	//allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	//fmt.print("Allowed origins: %s", allowedOrigins)
 
 	//var endpointRouter = HTTP.Routes{} // Inicializacija router-jev za endpoint-e
 	Mongo.ConnectToMongoDB() // Vzpostavitev povezave s podatkovno bazo MongoDB
