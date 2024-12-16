@@ -20,7 +20,7 @@ func main() {
 	}
 
 	// Access environment variables
-	port := os.Getenv("PORT")
+	port := os.Getenv("BACKEND_PORT")
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 
 	//var endpointRouter = HTTP.Routes{} // Inicializacija router-jev za endpoint-e

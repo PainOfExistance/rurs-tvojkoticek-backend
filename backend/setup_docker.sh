@@ -1,6 +1,5 @@
-docker container stop tvoj_koticek_backend_container || true
-docker container rm tvoj_koticek_backend_container || true
+docker compose down
 
-docker build -t tvoj_koticek_backend .
+docker build -t tvoj_koticek_backend_image .
 
-docker run --name tvoj_koticek_backend_container -p 8080:8080 tvoj_koticek_backend
+docker compose up -d
