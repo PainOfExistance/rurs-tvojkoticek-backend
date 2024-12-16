@@ -1,16 +1,61 @@
-@import './base.css';
+/* main.css */
 
-#app {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 2rem;
-
-  font-weight: normal;
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
 }
 
-@media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
+body {
+  padding-top: 80px; /* Equal height as Header */
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Light Theme (Default) */
+:root {
+  --bg-color: #ffffff;
+  --text-color: #333333;
+  --card-bg-color: #f8f9fa;
+  --button-bg-color: #8da4b9;
+  --button-hover-bg-color: #7b93a9;
+}
+
+/* Dark Theme */
+body.dark-theme {
+  --bg-color: #121212;
+  --text-color: #f1f1f1;
+  --card-bg-color: #1e1e1e;
+  --button-bg-color: #54627b;
+  --button-hover-bg-color: #43506a;
+}
+
+.card {
+  background-color: var(--card-bg-color);
+  color: var(--text-color);
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+button {
+  background-color: var(--button-bg-color);
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: var(--button-hover-bg-color);
 }
