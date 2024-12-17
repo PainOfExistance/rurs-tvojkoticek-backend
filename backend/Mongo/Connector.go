@@ -14,6 +14,10 @@ var mongoDBInstance *mongo.Client = nil
 func ConnectToMongoDB() {
 	uri := os.Getenv("MONGO_URI")
 
+	if uri == "" {
+		uri = "mongodb+srv://admin:admin@cluster0.gsva6.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+	}
+
 	// Create a new MongoDB instance with the provided URI
 	newMongoInstance, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
 	if err != nil {

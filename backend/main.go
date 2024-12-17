@@ -3,7 +3,6 @@ package main
 import (
 	"backend/HTTP"
 	"backend/Mongo"
-	"log"
 	"os"
 
 	"github.com/gin-contrib/cors"
@@ -14,14 +13,13 @@ import (
 func main() {
 
 	err := godotenv.Load("/root/.env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
 
-	// Access environment variables
-	port := os.Getenv("BACKEND_PORT")
-	//allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
-	//fmt.print("Allowed origins: %s", allowedOrigins)
+	var port string
+	if err == nil {
+		port = os.Getenv("BACKEND_PORT")
+	} else {
+		port = "8080"
+	}
 
 	//var endpointRouter = HTTP.Routes{} // Inicializacija router-jev za endpoint-e
 	Mongo.ConnectToMongoDB() // Vzpostavitev povezave s podatkovno bazo MongoDB
