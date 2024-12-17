@@ -23,5 +23,7 @@ func Router(router *gin.Engine) {
 	router.GET("/videostore/video", Functions.GetVideo)
 	router.GET("/videostore/all", Functions.GetAllVideos)
 	router.GET("/videostore/videos/name", Functions.GetAllVideosByName)
+	router.DELETE("/videostore/video", Functions.DeleteVideoByID)
+	router.POST("/videostore/flag", Functions.FlagVideo)
 
 }

@@ -4,9 +4,11 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="00a0f969-5201-4449-9a66-0005f142d663" name="Changes" comment="Implementacija pridobivanja vseh videov, in videov z določenim imenom">
+    <list default="true" id="00a0f969-5201-4449-9a66-0005f142d663" name="Changes" comment="dodal pridobivanje metapodatkov ob videih.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/Functions/VideoStore.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Functions/VideoStore.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/HTTP/Routes.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/HTTP/Routes.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/Schemas/VideoStore.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Schemas/VideoStore.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/backend/go.mod" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -126,7 +128,8 @@
     <MESSAGE value="Added API support for Comments and Posts" />
     <MESSAGE value="Osnovna implementacija objavljanja in pridobivanja videov" />
     <MESSAGE value="Implementacija pridobivanja vseh videov, in videov z določenim imenom" />
-    <option name="LAST_COMMIT_MESSAGE" value="Implementacija pridobivanja vseh videov, in videov z določenim imenom" />
+    <MESSAGE value="dodal pridobivanje metapodatkov ob videih." />
+    <option name="LAST_COMMIT_MESSAGE" value="dodal pridobivanje metapodatkov ob videih." />
   </component>
   <component name="VgoProject">
     <settings-migrated>true</settings-migrated>

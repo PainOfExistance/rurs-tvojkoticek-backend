@@ -14,4 +14,5 @@ type Video struct {
 	Comments    []Comment          `json:"comments" bson:"comments"`
 	VideoID     string             `json:"video_id" bson:"video_id"`
 	PostedAt    time.Time          `json:"posted_at" bson:"posted_at"`
+	Flagged     int                `json:"flagged" bson:"flagged"`
 }

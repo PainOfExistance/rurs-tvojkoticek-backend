@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"net/http"
 	"time"
@@ -37,9 +38,23 @@ func UploadVideo(c *gin.Context) {
 		return
 	}
 
-	// Generate a unique filename by appending a timestamp
-	uniqueFilename := fmt.Sprintf("%s_%d", videoName, time.Now().UnixNano())
+	// Query the database for existing videos with the same name
+	collection := Mongo.GetCollection("videostore")
+	cursor, err := collection.Find(context.TODO(), bson.M{"video_name": videoName})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error querying video name count"})
+		return
+	}
+	defer cursor.Close(context.TODO())
 
+	// Count existing videos with the same name
+	count := 0
+	for cursor.Next(context.TODO()) {
+		count++
+	}
+
+	// Generate a unique filename by appending index and timestamp
+	uniqueFilename := fmt.Sprintf("%s_%d_%d", videoName, count+1, time.Now().UnixNano())
 	// Connect to GridFS bucket
 	client := Mongo.GetMongoDB()
 	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
@@ -64,7 +79,8 @@ func UploadVideo(c *gin.Context) {
 		Tags:        c.PostFormArray("tags"),
 		VideoID:     videoID.Hex(),
 		Comments:    []Schemas.Comment{}, // Initialize empty comments
-		PostedAt:    time.Now(),          // Timestamp
+		PostedAt:    time.Now(),
+		Flagged:     0,
 	}
 
 	// Save metadata to the 'videostore' collection
@@ -104,11 +120,15 @@ func GetVideo(c *gin.Context) {
 		return
 	}
 
-	// Retrieve video metadata
+	// Retrieve video metadata excluding flagged videos
 	var videoMetadata Schemas.Video
-	err = Mongo.GetCollection("videostore").FindOne(context.TODO(), bson.M{"video_id": videoID}).Decode(&videoMetadata)
+	err = Mongo.GetCollection("videostore").FindOne(context.TODO(), bson.M{"video_id": videoID, "flagged": bson.M{"$lte": 3}}).Decode(&videoMetadata)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Video metadata not found"})
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Video not found or flagged"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error retrieving video metadata"})
+		}
 		return
 	}
 
@@ -129,12 +149,14 @@ func GetVideo(c *gin.Context) {
 
 	// Write video metadata to metadata.txt
 	metadataContent := fmt.Sprintf(
-		"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\n",
+		"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\nVideo ID: %s\nFlagged Count: %d\\n",
 		videoMetadata.VideoName,
 		videoMetadata.Uploader,
 		videoMetadata.Description,
 		videoMetadata.Tags,
 		videoMetadata.PostedAt.Format(time.RFC3339),
+		videoMetadata.VideoID,
+		videoMetadata.Flagged,
 	)
 	_, err = metadataFile.Write([]byte(metadataContent))
 	if err != nil {
@@ -161,7 +183,6 @@ func GetVideo(c *gin.Context) {
 }
 
 func GetAllVideos(c *gin.Context) {
-	// Connect to MongoDB and GridFS
 	client := Mongo.GetMongoDB()
 	collection := Mongo.GetCollection("videostore")
 	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
@@ -170,8 +191,8 @@ func GetAllVideos(c *gin.Context) {
 		return
 	}
 
-	// Query all videos
-	cursor, err := collection.Find(context.TODO(), bson.M{})
+	// Query all videos excluding flagged ones
+	cursor, err := collection.Find(context.TODO(), bson.M{"flagged": bson.M{"$lte": 3}})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error querying video metadata"})
 		return
@@ -186,10 +207,9 @@ func GetAllVideos(c *gin.Context) {
 	zipWriter := zip.NewWriter(c.Writer)
 	defer zipWriter.Close()
 
-	// Counter to track videos added
-	var videoCount int
+	index := 1
+	videoCount := 0
 
-	// Loop through all videos
 	for cursor.Next(context.TODO()) {
 		var videoMetadata Schemas.Video
 		if err := cursor.Decode(&videoMetadata); err != nil {
@@ -204,46 +224,47 @@ func GetAllVideos(c *gin.Context) {
 			continue
 		}
 
-		// Add metadata.txt file for this video
-		metadataFile, err := zipWriter.Create(fmt.Sprintf("%s_metadata.txt", videoMetadata.VideoName))
+		// Add metadata.txt file for this video with an index
+		metadataFile, err := zipWriter.Create(fmt.Sprintf("%s_%d_metadata.txt", videoMetadata.VideoName, index))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating metadata file"})
 			return
 		}
 
-		// Write video metadata content
 		metadataContent := fmt.Sprintf(
-			"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\n",
+			"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\nVideo ID: %s\nFlagged Count: %d\\n",
 			videoMetadata.VideoName,
 			videoMetadata.Uploader,
 			videoMetadata.Description,
 			videoMetadata.Tags,
 			videoMetadata.PostedAt.Format(time.RFC3339),
+			videoMetadata.VideoID, // Include the video_id here
+			videoMetadata.Flagged,
 		)
+
 		_, err = metadataFile.Write([]byte(metadataContent))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error writing metadata file"})
 			return
 		}
 
-		// Add the video file itself
-		videoFile, err := zipWriter.Create(fmt.Sprintf("%s.mp4", videoMetadata.VideoName))
+		// Add the video file itself with an index
+		videoFile, err := zipWriter.Create(fmt.Sprintf("%s_%d.mp4", videoMetadata.VideoName, index))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating video file in ZIP"})
 			return
 		}
 
-		// Stream video content into the ZIP file
 		_, err = bucket.DownloadToStream(objectID, videoFile)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming video to ZIP", "error": err.Error()})
 			return
 		}
 
+		index++
 		videoCount++
 	}
 
-	// Check for cursor errors
 	if err := cursor.Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Cursor error"})
 		return
@@ -274,8 +295,8 @@ func GetAllVideosByName(c *gin.Context) {
 		return
 	}
 
-	// Query for all videos matching the video_name
-	cursor, err := collection.Find(context.TODO(), bson.M{"video_name": videoName})
+	// Query for all videos matching the video_name and flagged count
+	cursor, err := collection.Find(context.TODO(), bson.M{"video_name": videoName, "flagged": bson.M{"$lte": 3}})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error querying video metadata"})
 		return
@@ -290,8 +311,9 @@ func GetAllVideosByName(c *gin.Context) {
 	zipWriter := zip.NewWriter(c.Writer)
 	defer zipWriter.Close()
 
-	// Counter to track files added
-	var videoCount int
+	// Initialize an index for file differentiation
+	index := 1
+	videoCount := 0
 
 	// Loop through matching videos and add them to the ZIP
 	for cursor.Next(context.TODO()) {
@@ -308,29 +330,33 @@ func GetAllVideosByName(c *gin.Context) {
 			continue
 		}
 
-		// Add metadata.txt file for this video
-		metadataFile, err := zipWriter.Create(fmt.Sprintf("%s_metadata.txt", videoMetadata.VideoName))
+		// Add metadata.txt file for this video with an index
+		metadataFile, err := zipWriter.Create(fmt.Sprintf("%s_%d_metadata.txt", videoMetadata.VideoName, index))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating metadata file"})
 			return
 		}
 
+		// Write metadata content
 		metadataContent := fmt.Sprintf(
-			"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\n",
+			"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\nVideo ID: %s\nFlagged Count: %d\n",
 			videoMetadata.VideoName,
 			videoMetadata.Uploader,
 			videoMetadata.Description,
 			videoMetadata.Tags,
 			videoMetadata.PostedAt.Format(time.RFC3339),
+			videoMetadata.VideoID,
+			videoMetadata.Flagged, // Add flagged count
 		)
+
 		_, err = metadataFile.Write([]byte(metadataContent))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error writing metadata file"})
 			return
 		}
 
-		// Add the video file itself
-		videoFile, err := zipWriter.Create(fmt.Sprintf("%s.mp4", videoMetadata.VideoName))
+		// Add the video file itself with an index
+		videoFile, err := zipWriter.Create(fmt.Sprintf("%s_%d.mp4", videoMetadata.VideoName, index))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating video file in ZIP"})
 			return
@@ -343,6 +369,8 @@ func GetAllVideosByName(c *gin.Context) {
 			return
 		}
 
+		// Increment counters
+		index++
 		videoCount++
 	}
 
@@ -358,4 +386,113 @@ func GetAllVideosByName(c *gin.Context) {
 
 	fmt.Printf("Total videos added to ZIP: %d\n", videoCount)
 	c.Status(http.StatusOK)
+}
+
+func DeleteVideoByID(c *gin.Context) {
+	// Get video_id from query parameters
+	videoID := c.Query("video_id")
+	if videoID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "video_id is required"})
+		return
+	}
+
+	// Convert video_id to ObjectID
+	objectID, err := primitive.ObjectIDFromHex(videoID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid video_id"})
+		return
+	}
+
+	// Connect to MongoDB
+	client := Mongo.GetMongoDB()
+	collection := Mongo.GetCollection("videostore")
+	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating GridFS bucket"})
+		return
+	}
+
+	// Find and delete video metadata
+	result := collection.FindOneAndDelete(context.TODO(), bson.M{"video_id": videoID})
+	if result.Err() != nil {
+		if result.Err() == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Video not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error deleting video metadata", "error": result.Err().Error()})
+		}
+		return
+	}
+
+	// Delete video file from GridFS
+	err = bucket.Delete(objectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error deleting video file from GridFS", "error": err.Error()})
+		return
+	}
+
+	// Return success response
+	c.JSON(http.StatusOK, gin.H{"message": "Video deleted successfully"})
+}
+
+func FlagVideo(c *gin.Context) {
+	videoID := c.Query("video_id")
+	userID := c.Query("user_id")
+	if videoID == "" || userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "video_id and user_id are required"})
+		return
+	}
+
+	// Connect to MongoDB
+	collection := Mongo.GetCollection("videostore")
+	flagsCollection := Mongo.GetCollection("flags")
+	usersCollection := Mongo.GetCollection("users")
+
+	// Verify the user exists in the users collection
+	var user bson.M
+	err := usersCollection.FindOne(context.TODO(), bson.M{"user_id": userID}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Invalid user"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error verifying user", "error": err.Error()})
+		}
+		return
+	}
+
+	// Check if the user has already flagged this video
+	var existingFlag bson.M
+	err = flagsCollection.FindOne(context.TODO(), bson.M{"video_id": videoID, "user_id": userID}).Decode(&existingFlag)
+	if err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "You have already flagged this video"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid video_id"})
+		return
+	}
+
+	// Increment the flagged counter in the videostore collection
+	_, err = collection.UpdateOne(
+		context.TODO(),
+		bson.M{"video_id": videoID},
+		bson.M{"$inc": bson.M{"flagged": 1}},
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error flagging the video", "error": err.Error()})
+		return
+	}
+
+	// Insert the user_id and video_id into the flags collection
+	_, err = flagsCollection.InsertOne(context.TODO(), bson.M{
+		"video_id":   videoID,
+		"user_id":    userID,
+		"flagged_at": time.Now(), // Optional: track when the flag occurred
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error recording flag action", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Video flagged successfully"})
 }
