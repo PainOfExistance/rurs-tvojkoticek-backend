@@ -389,10 +389,12 @@ func GetAllVideosByName(c *gin.Context) {
 }
 
 func DeleteVideoByID(c *gin.Context) {
-	// Get video_id from query parameters
+	// Get video_id and uploader_username from query parameters
 	videoID := c.Query("video_id")
-	if videoID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "video_id is required"})
+	uploaderUsername := c.Query("uploader_username")
+
+	if videoID == "" || uploaderUsername == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "video_id and uploader_username are required"})
 		return
 	}
 
@@ -406,9 +408,44 @@ func DeleteVideoByID(c *gin.Context) {
 	// Connect to MongoDB
 	client := Mongo.GetMongoDB()
 	collection := Mongo.GetCollection("videostore")
+	usersCollection := Mongo.GetCollection("users")
 	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating GridFS bucket"})
+		return
+	}
+
+	// Verify the user exists and check admin status
+	var user bson.M
+	err = usersCollection.FindOne(context.TODO(), bson.M{"username": uploaderUsername}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error retrieving user data", "error": err.Error()})
+		return
+	}
+
+	// Check if the user is an admin
+	isAdmin, _ := user["admin"].(bool)
+
+	// Find the video and verify uploader
+	var video bson.M
+	err = collection.FindOne(context.TODO(), bson.M{"video_id": videoID}).Decode(&video)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Video not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error retrieving video metadata", "error": err.Error()})
+		return
+	}
+
+	// Check if the uploader_username matches the uploader or if the user is an admin
+	uploader, ok := video["uploader_username"].(string)
+	if !ok || (uploader != uploaderUsername && !isAdmin) {
+		c.JSON(http.StatusForbidden, gin.H{"message": "You are not authorized to delete this video"})
 		return
 	}
 
@@ -437,62 +474,210 @@ func DeleteVideoByID(c *gin.Context) {
 func FlagVideo(c *gin.Context) {
 	videoID := c.Query("video_id")
 	userID := c.Query("user_id")
+
+	fmt.Printf("Received video_id: %s, user_id: %s\n", videoID, userID) // Log incoming parameters
+
 	if videoID == "" || userID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "video_id and user_id are required"})
 		return
 	}
 
+	// Convert userID to ObjectId
+	userObjectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid user_id format"})
+		return
+	}
+
 	// Connect to MongoDB
 	collection := Mongo.GetCollection("videostore")
-	flagsCollection := Mongo.GetCollection("flags")
 	usersCollection := Mongo.GetCollection("users")
 
 	// Verify the user exists in the users collection
 	var user bson.M
-	err := usersCollection.FindOne(context.TODO(), bson.M{"user_id": userID}).Decode(&user)
+	err = usersCollection.FindOne(context.TODO(), bson.M{"_id": userObjectID}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Invalid user"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error verifying user", "error": err.Error()})
+			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error verifying user", "error": err.Error()})
 		return
 	}
 
-	// Check if the user has already flagged this video
-	var existingFlag bson.M
-	err = flagsCollection.FindOne(context.TODO(), bson.M{"video_id": videoID, "user_id": userID}).Decode(&existingFlag)
-	if err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "You have already flagged this video"})
-		return
-	}
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid video_id"})
-		return
-	}
-
-	// Increment the flagged counter in the videostore collection
-	_, err = collection.UpdateOne(
+	// Atomically check if the user_id is already in the flagged_by array and add it if not
+	updateResult, err := collection.UpdateOne(
 		context.TODO(),
-		bson.M{"video_id": videoID},
-		bson.M{"$inc": bson.M{"flagged": 1}},
+		bson.M{
+			"video_id":   videoID,
+			"flagged_by": bson.M{"$ne": userID}, // Ensure the user is not already in the flagged_by array
+		},
+		bson.M{
+			"$inc":      bson.M{"flagged": 1},         // Increment the flagged count
+			"$addToSet": bson.M{"flagged_by": userID}, // Add userID to the flagged_by array
+		},
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error flagging the video", "error": err.Error()})
 		return
 	}
 
-	// Insert the user_id and video_id into the flags collection
-	_, err = flagsCollection.InsertOne(context.TODO(), bson.M{
-		"video_id":   videoID,
-		"user_id":    userID,
-		"flagged_at": time.Now(), // Optional: track when the flag occurred
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error recording flag action", "error": err.Error()})
+	// Check if the user was already in the flagged_by array
+	if updateResult.MatchedCount == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "You have already flagged this video"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Video flagged successfully"})
+}
+
+func GetFlaggedVideos(c *gin.Context) {
+	client := Mongo.GetMongoDB()
+	collection := Mongo.GetCollection("videostore")
+	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating GridFS bucket"})
+		return
+	}
+
+	// Query videos with flagged count greater than 3
+	cursor, err := collection.Find(context.TODO(), bson.M{"flagged": bson.M{"$gt": 3}})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error querying video metadata"})
+		return
+	}
+	defer cursor.Close(context.TODO())
+
+	// Set response headers for ZIP file
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", `attachment; filename="flagged_videos.zip"`)
+
+	// Create a ZIP writer
+	zipWriter := zip.NewWriter(c.Writer)
+	defer zipWriter.Close()
+
+	index := 1
+	videoCount := 0
+
+	for cursor.Next(context.TODO()) {
+		var videoMetadata Schemas.Video
+		if err := cursor.Decode(&videoMetadata); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error decoding video metadata"})
+			return
+		}
+
+		// Convert video_id to ObjectID
+		objectID, err := primitive.ObjectIDFromHex(videoMetadata.VideoID)
+		if err != nil {
+			fmt.Printf("Invalid ObjectID: %v\n", err)
+			continue
+		}
+
+		// Add metadata.txt file for this video with an index
+		metadataFile, err := zipWriter.Create(fmt.Sprintf("%s_%d_metadata.txt", videoMetadata.VideoName, index))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating metadata file"})
+			return
+		}
+
+		metadataContent := fmt.Sprintf(
+			"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\nVideo ID: %s\nFlagged Count: %d\n",
+			videoMetadata.VideoName,
+			videoMetadata.Uploader,
+			videoMetadata.Description,
+			videoMetadata.Tags,
+			videoMetadata.PostedAt.Format(time.RFC3339),
+			videoMetadata.VideoID,
+			videoMetadata.Flagged,
+		)
+
+		_, err = metadataFile.Write([]byte(metadataContent))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error writing metadata file"})
+			return
+		}
+
+		// Add the video file itself with an index
+		videoFile, err := zipWriter.Create(fmt.Sprintf("%s_%d.mp4", videoMetadata.VideoName, index))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating video file in ZIP"})
+			return
+		}
+
+		_, err = bucket.DownloadToStream(objectID, videoFile)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error streaming video to ZIP", "error": err.Error()})
+			return
+		}
+
+		index++
+		videoCount++
+	}
+
+	if err := cursor.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Cursor error"})
+		return
+	}
+
+	if videoCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "No flagged videos found in the database"})
+		return
+	}
+
+	fmt.Printf("Total flagged videos added to ZIP: %d\n", videoCount)
+	c.Status(http.StatusOK)
+}
+
+func ResetFlaggedCounter(c *gin.Context) {
+	// Get video_id and admin_username from query parameters
+	videoID := c.Query("video_id")
+	adminUsername := c.Query("admin_username")
+
+	if videoID == "" || adminUsername == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "video_id and admin_username are required"})
+		return
+	}
+
+	// Connect to MongoDB
+	collection := Mongo.GetCollection("videostore")
+	usersCollection := Mongo.GetCollection("users")
+
+	// Verify the user exists and is an admin
+	var user bson.M
+	err := usersCollection.FindOne(context.TODO(), bson.M{"username": adminUsername}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Admin user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error retrieving user data", "error": err.Error()})
+		return
+	}
+
+	// Check if the user is an admin
+	isAdmin, _ := user["admin"].(bool)
+	if !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"message": "You are not authorized to reset the flagged counter"})
+		return
+	}
+
+	// Reset the flagged counter of the video to 0
+	updateResult, err := collection.UpdateOne(
+		context.TODO(),
+		bson.M{"video_id": videoID},
+		bson.M{"$set": bson.M{"flagged": 0}},
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error resetting flagged counter", "error": err.Error()})
+		return
+	}
+
+	// Check if the video was found and updated
+	if updateResult.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Video not found"})
+		return
+	}
+
+	// Return success response
+	c.JSON(http.StatusOK, gin.H{"message": "Flagged counter reset successfully"})
 }

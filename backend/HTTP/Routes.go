@@ -26,5 +26,7 @@ func Router(router *gin.Engine) {
 	router.GET("/videostore/videos/name", Functions.GetAllVideosByName)
 	router.DELETE("/videostore/video", Functions.DeleteVideoByID)
 	router.POST("/videostore/flag", Functions.FlagVideo)
+	router.GET("/videostore/flagged", Functions.GetFlaggedVideos)
+	router.POST("/videostore/reset-flagged", Functions.ResetFlaggedCounter)
 
 }
