@@ -11,10 +11,12 @@ export default {
             searchQuery: '',
             flags: ['Support', 'Help', 'Community'],
             selectedFlags: [],
-            dropdownOpen: false
+            dropdownOpen: false,
+            isAdmin: false
         }
     },
     mounted() {
+        this.checkAdmin();
         this.runOnLoad();
     },
     methods: {
@@ -45,30 +47,6 @@ export default {
         async searchVideos() {
             try {
                 const response = await axios.get(`http://localhost:8080/videostore/search?query=${this.searchQuery}`, { responseType: 'arraybuffer' });
-                const zip = await JSZip.loadAsync(response.data);
-                const videoFiles = zip.file(/\.mp4$/);
-                const metadataFiles = zip.file(/\.txt$/);
-
-                this.videos = [];
-                for (let i = 0; i < metadataFiles.length; i++) {
-                    const metadata = await metadataFiles[i].async("string");
-                    const videoMetadata = this.parseMetadata(metadata);
-                    const videoBlob = await videoFiles[i].async("blob");
-                    const videoUrl = URL.createObjectURL(videoBlob);
-
-                    this.videos.push({
-                        ...videoMetadata,
-                        url: videoUrl
-                    });
-                }
-
-            } catch (error) {
-                console.error(error);
-            }
-        },
-        async getVideosByFlag(flag) {
-            try {
-                const response = await axios.get(`http://localhost:8080/videostore/flag?flag=${flag}`, { responseType: 'arraybuffer' });
                 const zip = await JSZip.loadAsync(response.data);
                 const videoFiles = zip.file(/\.mp4$/);
                 const metadataFiles = zip.file(/\.txt$/);
@@ -126,6 +104,33 @@ export default {
             } catch (error) {
                 console.error(error);
                 alert('Failed to report the video.');
+            }
+        },
+        checkAdmin() {
+            this.isAdmin = Cookies.get('isAdmin') === 'true';
+        },
+        async getFlaggedVideos() {
+            try {
+                const response = await axios.get('http://localhost:8080/videostore/flagged', { responseType: 'arraybuffer' });
+                const zip = await JSZip.loadAsync(response.data);
+                const videoFiles = zip.file(/\.mp4$/);
+                const metadataFiles = zip.file(/\.txt$/);
+
+                this.videos = [];
+                for (let i = 0; i < metadataFiles.length; i++) {
+                    const metadata = await metadataFiles[i].async("string");
+                    const videoMetadata = this.parseMetadata(metadata);
+                    const videoBlob = await videoFiles[i].async("blob");
+                    const videoUrl = URL.createObjectURL(videoBlob);
+
+                    this.videos.push({
+                        ...videoMetadata,
+                        url: videoUrl
+                    });
+                }
+
+            } catch (error) {
+                console.error(error);
             }
         },
         parseMetadata(metadata) {
@@ -197,6 +202,9 @@ export default {
                             </li>
                         </ul>
                     </div>
+                </div>
+                <div v-if="isAdmin" class="mt-2">
+                    <button class="btn btn-warning" @click="getFlaggedVideos">Prikaži prijavljene videje</button>
                 </div>
             </div>
         </div>
