@@ -15,4 +15,5 @@ type Video struct {
 	VideoID     string             `json:"video_id" bson:"video_id"`
 	PostedAt    time.Time          `json:"posted_at" bson:"posted_at"`
 	Flagged     int                `json:"flagged" bson:"flagged"`
+	FlaggedBy   []string           `json:"flagged_by" bson:"flagged_by"`
 }

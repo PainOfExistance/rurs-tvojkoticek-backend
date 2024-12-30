@@ -18,7 +18,7 @@ func GetProfile(c *gin.Context) {
 
 	client := Mongo.GetMongoDB()
 	var user Schemas.User
-	err := client.Database("tezno_district").Collection("users").FindOne(c, bson.M{"username": username}).Decode(&user)
+	err := client.Database("Pametni-Paketnik-baza").Collection("users").FindOne(c, bson.M{"username": username}).Decode(&user)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
 		return
@@ -43,7 +43,7 @@ func Login(c *gin.Context) {
 
 	client := Mongo.GetMongoDB()
 	var user Schemas.User
-	err := client.Database("tezno_district").Collection("users").FindOne(c, bson.M{"username": loginDetails.Username}).Decode(&user)
+	err := client.Database("Pametni-Paketnik-baza").Collection("users").FindOne(c, bson.M{"username": loginDetails.Username}).Decode(&user)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
 		return
@@ -77,7 +77,7 @@ func Register(c *gin.Context) {
 	user.Password = string(hashedPassword)
 
 	client := Mongo.GetMongoDB()
-	_, err = client.Database("tezno_district").Collection("users").InsertOne(c, user)
+	_, err = client.Database("Pametni-Paketnik-baza").Collection("users").InsertOne(c, user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error registering user"})
 		return
@@ -99,7 +99,7 @@ func ChangePassword(c *gin.Context) {
 
 	client := Mongo.GetMongoDB()
 	var user Schemas.User
-	err := client.Database("tezno_district").Collection("users").FindOne(c, bson.M{"username": changePassword.Username}).Decode(&user)
+	err := client.Database("Pametni-Paketnik-baza").Collection("users").FindOne(c, bson.M{"username": changePassword.Username}).Decode(&user)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
 		return
@@ -111,7 +111,7 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	_, err = client.Database("tezno_district").Collection("users").UpdateOne(c, bson.M{"username": changePassword.Username}, bson.M{"$set": bson.M{"password": string(hashedPassword)}})
+	_, err = client.Database("Pametni-Paketnik-baza").Collection("users").UpdateOne(c, bson.M{"username": changePassword.Username}, bson.M{"$set": bson.M{"password": string(hashedPassword)}})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error changing password"})
 		return
