@@ -12,6 +12,7 @@
       <router-link to="/home" class="nav-link">Domača Stran</router-link>
       <router-link to="/ask" class="nav-link">Vprašaj</router-link>
       <router-link to="/posts" class="nav-link">Objave</router-link>
+      <router-link to="/post-video" class="nav-link">Objavi Video</router-link>
       <router-link to="/videostore" class="nav-link">Videoteka</router-link>
     </nav>
 

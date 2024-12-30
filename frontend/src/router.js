@@ -4,6 +4,7 @@ import Posts from "@/components/Posts/Posts.vue";
 import Ask from "@/components/Question/Ask.vue";
 import Details from "@/components/Question/Details.vue";
 import Profile from "@/components/user/Profile.vue";
+import PostVideo from "@/components/Videostore/PostVideo.vue";
 import { createRouter, createWebHistory } from 'vue-router';
 import Home from './components/Home.vue';
 import Landing from './components/Landing.vue';
@@ -42,6 +43,12 @@ const routes = [
     path: '/ask',
     name: 'Ask',
     component: Ask,
+    meta: { requiresAuth: true }, // Zahteva prijavo
+  },
+  {
+    path: '/post-video',
+    name: 'PostVideo',
+    component: PostVideo,
     meta: { requiresAuth: true }, // Zahteva prijavo
   },
   {
