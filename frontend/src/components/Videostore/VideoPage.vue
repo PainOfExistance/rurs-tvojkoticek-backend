@@ -1,5 +1,6 @@
 <script>
 import axios from "axios";
+import Cookies from 'js-cookie';
 import JSZip from "jszip";
 
 export default {
@@ -26,6 +27,7 @@ export default {
 
                 for (let i = 0; i < metadataFiles.length; i++) {
                     const metadata = await metadataFiles[i].async("string");
+                    console.log(metadata);
                     const videoMetadata = this.parseMetadata(metadata);
                     const videoBlob = await videoFiles[i].async("blob");
                     const videoUrl = URL.createObjectURL(videoBlob);
@@ -111,6 +113,19 @@ export default {
 
             } catch (error) {
                 console.error(error);
+            }
+        },
+        async reportVideo(videoId) {
+            try {
+                const userId = Cookies.get('id'); // Assuming user ID is stored in a cookie named 'user_id'
+                await axios.post('http://localhost:8080/videostore/report', {
+                    videoId,
+                    userId
+                });
+                alert('Video reported successfully.');
+            } catch (error) {
+                console.error(error);
+                alert('Failed to report the video.');
             }
         },
         parseMetadata(metadata) {
@@ -204,6 +219,7 @@ export default {
                         <span class="card-text"><span class="fw-bold">Oznake:</span> {{ video.tags }}</span>
                         <div class="text-end">
                             <button class="btn btn-danger" @click="goToMore(video.ID)">Poglej več</button>
+                            <button class="btn btn-warning" @click="reportVideo(video.ID)">Prijavi video</button>
                         </div>
                     </div>
                 </div>
@@ -227,5 +243,15 @@ export default {
 .btn-danger:hover {
     background-color: #fd9c8c !important;
     border-color: #fd9c8c !important;
+}
+
+.btn-warning {
+    background-color: #ffc107 !important;
+    border-color: #ffc107 !important;
+}
+
+.btn-warning:hover {
+    background-color: #e0a800 !important;
+    border-color: #e0a800 !important;
 }
 </style>
