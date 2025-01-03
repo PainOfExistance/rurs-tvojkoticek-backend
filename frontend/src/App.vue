@@ -1,9 +1,8 @@
+<!-- src/App.vue -->
 <template>
   <div id="app">
-    <!-- Show Header only if not hidden via route meta -->
+    <!-- Example header or navigation -->
     <Header v-if="!$route.meta.hideHeader" />
-
-    <!-- Main Content -->
     <div :class="containerClass">
       <router-view />
     </div>
@@ -21,8 +20,8 @@ export default {
     },
   },
   watch: {
-    // Watch route changes to toggle the 'no-scroll' class on body
     $route(to) {
+      // If route meta says hideHeader => prevent scrolling
       if (to.meta.hideHeader) {
         document.body.classList.add('no-scroll');
       } else {
@@ -31,7 +30,7 @@ export default {
     },
   },
   mounted() {
-    // Set correct 'no-scroll' class on initial load
+    // Initial scrolling logic
     if (this.$route.meta.hideHeader) {
       document.body.classList.add('no-scroll');
     } else {
@@ -45,47 +44,26 @@ export default {
 </script>
 
 <style>
-/* Box-sizing and reset styles */
-*, *::before, *::after {
-  box-sizing: border-box;
-}
-
-body, html {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  font-family: 'Poppins', sans-serif;
-  background: linear-gradient(135deg, #fbcfe8, #fde2e4, #fbd4e7, #fbe9e7);
-  background-size: 400% 400%;
-  animation: gradientBG 20s ease infinite;
-}
-
-
+/* Minimal styling for layout */
 #app {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: transparent;
 }
 
+/* Provide some padding if not hiding header */
 .container {
   flex-grow: 1;
-  padding: 20px; /* Default padding */
+  padding: 20px;
 }
 
 .no-container {
-  padding: 0; /* Remove padding on pages without header */
+  padding: 0;
 }
 
-/* Disable scrolling */
+/* Prevent scrolling if 'no-scroll' is active on body */
 .no-scroll {
   overflow: hidden;
   height: 100%;
-}
-
-@keyframes gradientBG {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
 }
 </style>
