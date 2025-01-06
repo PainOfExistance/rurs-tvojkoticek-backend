@@ -5,14 +5,16 @@ import (
 	"backend/Mongo"
 	"backend/Schemas"
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
-	"net/http"
-	"time"
 )
 
 func UploadVideo(c *gin.Context) {
@@ -471,9 +473,20 @@ func DeleteVideoByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Video deleted successfully"})
 }
 
+type VideoFlagRequest struct {
+	VideoID string `json:"video_id"`
+	UserID  string `json:"user_id"`
+}
+
 func FlagVideo(c *gin.Context) {
-	videoID := c.Query("video_id")
-	userID := c.Query("user_id")
+
+	var request VideoFlagRequest
+	if err := c.BindJSON(&request); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	videoID := request.VideoID
+	userID := request.UserID
 
 	fmt.Printf("Received video_id: %s, user_id: %s\n", videoID, userID) // Log incoming parameters
 
@@ -484,6 +497,7 @@ func FlagVideo(c *gin.Context) {
 
 	// Convert userID to ObjectId
 	userObjectID, err := primitive.ObjectIDFromHex(userID)
+	fmt.Printf("userObjectID: %s\n", userObjectID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid user_id format"})
 		return
@@ -496,7 +510,8 @@ func FlagVideo(c *gin.Context) {
 	// Verify the user exists in the users collection
 	var user bson.M
 	err = usersCollection.FindOne(context.TODO(), bson.M{"_id": userObjectID}).Decode(&user)
-	if err != nil {
+
+	if errors.Is(err, mongo.ErrNoDocuments) {
 		if err == mongo.ErrNoDocuments {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Invalid user"})
 			return
@@ -517,6 +532,7 @@ func FlagVideo(c *gin.Context) {
 			"$addToSet": bson.M{"flagged_by": userID}, // Add userID to the flagged_by array
 		},
 	)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error flagging the video", "error": err.Error()})
 		return

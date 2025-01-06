@@ -29,7 +29,6 @@ export default {
 
                 for (let i = 0; i < metadataFiles.length; i++) {
                     const metadata = await metadataFiles[i].async("string");
-                    console.log(metadata);
                     const videoMetadata = this.parseMetadata(metadata);
                     const videoBlob = await videoFiles[i].async("blob");
                     const videoUrl = URL.createObjectURL(videoBlob);
@@ -93,17 +92,16 @@ export default {
                 console.error(error);
             }
         },
-        async reportVideo(videoId) {
+        async reportVideo(video_id) {
             try {
-                const userId = Cookies.get('id'); // Assuming user ID is stored in a cookie named 'user_id'
-                await axios.post('http://localhost:8080/videostore/report', {
-                    videoId,
-                    userId
+                const user_id = Cookies.get('id'); // Assuming user ID is stored in a cookie named 'user_id'
+                await axios.post('http://localhost:8080/videostore/flag', {
+                    video_id,
+                    user_id
                 });
                 alert('Video reported successfully.');
             } catch (error) {
-                console.error(error);
-                alert('Failed to report the video.');
+                alert(error.response.data.message);
             }
         },
         checkAdmin() {
@@ -226,8 +224,8 @@ export default {
                         <br>
                         <span class="card-text"><span class="fw-bold">Oznake:</span> {{ video.tags }}</span>
                         <div class="text-end">
-                            <button class="btn btn-danger" @click="goToMore(video.ID)">Poglej več</button>
-                            <button class="btn btn-warning" @click="reportVideo(video.ID)">Prijavi video</button>
+                            <button class="btn btn-danger" @click="goToMore(video.video_id)">Poglej več</button>
+                            <button class="btn btn-warning" @click="reportVideo(video.video_id)">Prijavi video</button>
                         </div>
                     </div>
                 </div>
