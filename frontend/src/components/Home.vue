@@ -23,15 +23,15 @@
         <hr />
         <p>
           Spletna stran TvojKoticek.si je namenjena vsem, ki si želijo:
-          <p>
+          <span>
             - Podeliti svoje občutke in misli v varnem in podpornem okolju.
-          </p>
-          <p>
+          </span>
+          <span>
             - Pridobiti mnenje ali nasvet od ljudi, ki razumejo ali so šli skozi podobne izzive.
-          </p>
-          <p>
+          </span>
+          <span>
             - Zgraditi skupnost, ki temelji na spoštovanju, razumevanju in empatiji.
-          </p>
+          </span>
         </p>
         <hr />
         <p>

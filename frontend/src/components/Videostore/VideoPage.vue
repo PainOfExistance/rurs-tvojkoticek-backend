@@ -222,9 +222,9 @@ export default {
                         <br>
                         <span class="card-text"><span class="fw-bold">Opis:</span> {{ video.description }}</span>
                         <br>
-                        <span class="card-text"><span class="fw-bold">Oznake:</span> {{ video.tags }}</span>
+                        <!--<span class="card-text"><span class="fw-bold">Oznake:</span> {{ video.tags }}</span>-->
                         <div class="text-end">
-                            <button class="btn btn-danger" @click="goToMore(video.video_id)">Poglej več</button>
+                            <button class="btn btn-danger" @click="goToDetails(video.video_id)">Poglej več</button>
                             <button class="btn btn-warning" @click="reportVideo(video.video_id)">Prijavi video</button>
                         </div>
                     </div>

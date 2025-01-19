@@ -33,30 +33,30 @@ func UploadVideo(c *gin.Context) {
 	}
 	defer fileStream.Close()
 
-	// Get video_name from form data
-	videoName := c.PostForm("video_name")
-	if videoName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "video_name is required"})
+	// Get video title from form data (renamed from video_name to title)
+	videoTitle := c.PostForm("title")
+	if videoTitle == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "title is required"})
 		return
 	}
 
-	// Query the database for existing videos with the same name
+	// Query the database for existing videos with the same title
 	collection := Mongo.GetCollection("videostore")
-	cursor, err := collection.Find(context.TODO(), bson.M{"video_name": videoName})
+	cursor, err := collection.Find(context.TODO(), bson.M{"video_name": videoTitle})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error querying video name count"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error querying video title count"})
 		return
 	}
 	defer cursor.Close(context.TODO())
 
-	// Count existing videos with the same name
+	// Count existing videos with the same title
 	count := 0
 	for cursor.Next(context.TODO()) {
 		count++
 	}
 
 	// Generate a unique filename by appending index and timestamp
-	uniqueFilename := fmt.Sprintf("%s_%d_%d", videoName, count+1, time.Now().UnixNano())
+	uniqueFilename := fmt.Sprintf("%s_%d_%d", videoTitle, count+1, time.Now().UnixNano())
 	// Connect to GridFS bucket
 	client := Mongo.GetMongoDB()
 	bucket, err := gridfs.NewBucket(client.Database("Pametni-Paketnik-baza"))
@@ -75,10 +75,10 @@ func UploadVideo(c *gin.Context) {
 	// Create video metadata using the Video schema
 	videoMetadata := Schemas.Video{
 		ID:          primitive.NewObjectID(),
-		VideoName:   videoName, // Passed from the user
+		VideoName:   videoTitle, // Passed from the user
 		Uploader:    c.PostForm("uploader_username"),
 		Description: c.PostForm("description"),
-		Tags:        c.PostFormArray("tags"),
+		Tags:        c.PostFormArray("flags"), // Expecting 'flags' from the frontend
 		VideoID:     videoID.Hex(),
 		Comments:    []Schemas.Comment{}, // Initialize empty comments
 		PostedAt:    time.Now(),
@@ -101,11 +101,12 @@ func UploadVideo(c *gin.Context) {
 }
 
 func GetVideo(c *gin.Context) {
-	videoID := c.Query("video_id")
+	videoID := c.Param("id")
 	if videoID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "video_id is required"})
 		return
 	}
+	fmt.Printf("Received video_id: %s\n", videoID)
 
 	// Connect to MongoDB and GridFS
 	client := Mongo.GetMongoDB()
@@ -126,11 +127,7 @@ func GetVideo(c *gin.Context) {
 	var videoMetadata Schemas.Video
 	err = Mongo.GetCollection("videostore").FindOne(context.TODO(), bson.M{"video_id": videoID, "flagged": bson.M{"$lte": 3}}).Decode(&videoMetadata)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			c.JSON(http.StatusNotFound, gin.H{"message": "Video not found or flagged"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error retrieving video metadata"})
-		}
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Video not found or flagged"})
 		return
 	}
 
@@ -151,7 +148,7 @@ func GetVideo(c *gin.Context) {
 
 	// Write video metadata to metadata.txt
 	metadataContent := fmt.Sprintf(
-		"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\nVideo ID: %s\nFlagged Count: %d\\n",
+		"Video Name: %s\nUploader: %s\nDescription: %s\nTags: %v\nPosted At: %s\nVideo ID: %s\nFlagged Count: %d\n",
 		videoMetadata.VideoName,
 		videoMetadata.Uploader,
 		videoMetadata.Description,

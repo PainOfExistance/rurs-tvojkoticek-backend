@@ -5,6 +5,7 @@ import Ask from "@/components/Question/Ask.vue";
 import Details from "@/components/Question/Details.vue";
 import Profile from "@/components/user/Profile.vue";
 import PostVideo from "@/components/Videostore/PostVideo.vue";
+import Video from "@/components/Videostore/Video.vue";
 import { createRouter, createWebHistory } from 'vue-router';
 import Home from './components/Home.vue';
 import Landing from './components/Landing.vue';
@@ -50,6 +51,11 @@ const routes = [
     name: 'PostVideo',
     component: PostVideo,
     meta: { requiresAuth: true }, // Zahteva prijavo
+  },
+  {
+    path: '/video/:id',
+    name: 'Video',
+    component: Video
   },
   {
     path: '/posts',

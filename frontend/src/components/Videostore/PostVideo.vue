@@ -16,25 +16,14 @@
           <!-- Removed author input field -->
           <div class="form-group">
             <label for="titleInput" class="form-label">Naslov videa:</label>
-            <input
-              id="titleInput"
-              class="form-input"
-              placeholder="Vnesite naslov videa..."
-              required
-              v-model="formData.title"
-            />
+            <input id="titleInput" class="form-input" placeholder="Vnesite naslov videa..." required
+              v-model="formData.title" />
           </div>
 
           <div class="form-group">
             <label for="fileInput" class="form-label">Izberite video (MP4):</label>
-            <input
-              id="fileInput"
-              type="file"
-              class="form-input"
-              accept="video/mp4"
-              required
-              @change="handleFileUpload"
-            />
+            <input id="fileInput" type="file" class="form-input" accept="video/mp4" required
+              @change="handleFileUpload" />
           </div>
 
           <div class="form-group">
@@ -42,6 +31,12 @@
             <select id="flagInput" class="form-input" v-model="formData.flags" multiple>
               <option v-for="flag in flags" :key="flag" :value="flag">{{ flag }}</option>
             </select>
+          </div>
+
+          <div class="form-group">
+            <label for="descriptionInput" class="form-label">Opis videa:</label>
+            <textarea id="descriptionInput" class="form-textarea" placeholder="Vnesite opis videa..." required
+              v-model="formData.description"></textarea>
           </div>
 
           <button type="submit" class="btn btn-primary">Objavi</button>
@@ -78,6 +73,7 @@ export default {
         title: '',
         file: null,
         flags: [],
+        description: '',
       },
       flags: ['Support', 'Help', 'Community'], // Replace with actual flags
     };
@@ -95,14 +91,14 @@ export default {
     },
     async submitAVideo() {
       const formData = new FormData();
-      formData.append('username', this.formData.name);
-      formData.append('title', this.formData.title);
-      formData.append('file', this.formData.file);
-      formData.append('flags', this.formData.flags.join(',')); // Join flags into a comma-separated string
-      formData.append('date', new Date().toISOString().split('T')[0]);
+      formData.append('uploader_username', this.formData.name);
+      formData.append('title', this.formData.title); // Matches 'title' on the backend
+      formData.append('video', this.formData.file);
+      formData.append('flags[]', this.formData.flags); // Sends flags as an array
+      formData.append('description', this.formData.description);
 
       try {
-        const response = await axios.post('http://localhost:8080/post-video', formData, {
+        const response = await axios.post('http://localhost:8080/videostore/upload', formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
@@ -113,9 +109,9 @@ export default {
         }
       } catch (error) {
         console.error(error);
-        // Dodajte obravnavo napak po potrebi
+        // Handle errors as needed
       }
-    }
+    },
   },
   mounted() {
     this.checkLoginStatus();
@@ -274,29 +270,63 @@ export default {
 }
 
 @keyframes gradientBG {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(20px); }
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(20px);
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(-50px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* Responsive Adjustments */

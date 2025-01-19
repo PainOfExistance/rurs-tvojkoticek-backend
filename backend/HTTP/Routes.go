@@ -21,10 +21,10 @@ func Router(router *gin.Engine) {
 	router.DELETE("/comment", Functions.DeleteComment)
 
 	router.POST("/videostore/upload", Functions.UploadVideo)
-	router.GET("/videostore/video", Functions.GetVideo)
+	router.GET("/videostore/video:id", Functions.GetVideo)
 	router.GET("/videostore/all", Functions.GetAllVideos)
 	router.GET("/videostore/videos/name", Functions.GetAllVideosByName)
-	router.DELETE("/videostore/video", Functions.DeleteVideoByID)
+	router.DELETE("/videostore/video:video_id", Functions.DeleteVideoByID)
 	router.POST("/videostore/flag", Functions.FlagVideo)
 	router.GET("/videostore/flagged", Functions.GetFlaggedVideos)
 	router.POST("/videostore/reset-flagged", Functions.ResetFlaggedCounter)
