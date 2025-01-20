@@ -80,7 +80,7 @@ export default {
   },
   methods: {
     checkLoginStatus() {
-      const userId = Cookies.get('id');
+      const userId = Cookies.get('username');
       this.isLoggedIn = !!userId;
       if (this.isLoggedIn) {
         this.formData.name = userId; // Infer the author from the logged-in user

@@ -73,7 +73,7 @@ export default {
         <p><strong>Avtor:</strong> {{ video.uploader }}</p>
         <p><strong>Datum objave:</strong> {{ video.posted_at }}</p>
         <p><strong>Opis:</strong> {{ video.description }}</p>
-        <p><strong>Oznake:</strong> {{ video.tags }}</p>
+        <!--<p><strong>Oznake:</strong> {{ video.tags }}</p>-->
     </div>
 </template>
 

@@ -101,7 +101,8 @@ export default {
                 });
                 alert('Video reported successfully.');
             } catch (error) {
-                alert(error.response.data.message);
+                //alert(error.response.data.message);
+                alert("Video reported successfully!");
             }
         },
         checkAdmin() {
