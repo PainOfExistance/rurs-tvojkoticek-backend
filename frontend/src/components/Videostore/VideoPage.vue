@@ -8,6 +8,7 @@ export default {
     data() {
         return {
             videos: [],
+            originalVideos: [], // Add this line
             searchQuery: '',
             flags: ['Support', 'Help', 'Community'],
             selectedFlags: [],
@@ -33,38 +34,26 @@ export default {
                     const videoBlob = await videoFiles[i].async("blob");
                     const videoUrl = URL.createObjectURL(videoBlob);
 
-                    this.videos.push({
+                    const videoData = {
                         ...videoMetadata,
                         url: videoUrl
-                    });
+                    };
+
+                    
+                    this.videos.push(videoData);
+                    this.originalVideos.push(videoData); // Add this line
                 }
 
             } catch (error) {
                 console.error(error);
             }
         },
-        async searchVideos() {
-            try {
-                const response = await axios.get(`http://localhost:8080/videostore/search?query=${this.searchQuery}`, { responseType: 'arraybuffer' });
-                const zip = await JSZip.loadAsync(response.data);
-                const videoFiles = zip.file(/\.mp4$/);
-                const metadataFiles = zip.file(/\.txt$/);
-
-                this.videos = [];
-                for (let i = 0; i < metadataFiles.length; i++) {
-                    const metadata = await metadataFiles[i].async("string");
-                    const videoMetadata = this.parseMetadata(metadata);
-                    const videoBlob = await videoFiles[i].async("blob");
-                    const videoUrl = URL.createObjectURL(videoBlob);
-
-                    this.videos.push({
-                        ...videoMetadata,
-                        url: videoUrl
-                    });
-                }
-
-            } catch (error) {
-                console.error(error);
+        searchVideos() {
+            const query = this.searchQuery.toLowerCase();
+            if (query === '') {
+                this.videos = this.originalVideos; // Show all videos if search query is empty
+            } else {
+                this.videos = this.originalVideos.filter(video => video.video_name.toLowerCase().includes(query));
             }
         },
         async getVideosByFlags() {
@@ -208,7 +197,7 @@ export default {
             </div>
         </div>
         <div class="row">
-            <div class="col-6 mb-4" v-for="(video, index) in videos" :key="index">
+            <div class="col-6 mb-4" v-for="video in videos" :key="video.video_id"> <!-- Update this line -->
                 <div class="card">
                     <div class="card-body video-card-container">
                         <h4 class="video-title">{{ video.video_name }}</h4>
